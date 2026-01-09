@@ -1,0 +1,490 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Packrooster API",
+        "description": "API for creating shipping labels and fulfilling Shopify orders via Packrooster.",
+        "version": "0.0.1",
+        "contact": {
+            "name": "Approosters",
+            "email": "support@approosters.com"
+        },
+        "license": {
+            "name": "Proprietary",
+            "url": "https://approosters.com"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://packrooster.approosters.com",
+            "description": "Base URL for Packrooster"
+        }
+    ],
+
+    "paths": {
+        "/api/shipping/v1/shopify/label": {
+            "post": {
+                "operationId": "shopify.label",
+                "summary": "Create shipping label (no fulfillment)",
+                "description": "Accepts a Shopify order and fulfillment_order_id. Packs items if needed and creates a shipping label (if provider supports it). Does NOT fulfill the order in Shopify. Returns label URLs and available tracking info.",
+
+                "security": [
+                    {
+                        "ClientIdHeader": [],
+                        "SignatureHeader": [],
+                        "TimestampHeader": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FulfillRequest"
+                            },
+                            "examples": {
+                                "minimal": {
+                                    "value": {
+                                        "client": {
+                                            "name": "my-app",
+                                            "version": "1.0"
+                                        },
+                                        "data": {
+                                            "order_id": "12684524978558",
+                                            "fulfillment_order_id": "13795922215294"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Label created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request / validation errors",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests (Rate limit exceeded: 10 req/s)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/shipping/v1/shopify/fulfill": {
+            "post": {
+                "operationId": "shopify.fulfill",
+                "summary": "Fulfill a Shopify order (no new label)",
+                "description": "Accepts a Shopify order and fulfillment_order_id. Packs items if needed and fulfills the order in Shopify (sends tracking info). Does NOT create a new shipping label.",
+
+                "security": [
+                    {
+                        "ClientIdHeader": [],
+                        "SignatureHeader": [],
+                        "TimestampHeader": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FulfillRequest"
+                            },
+                            "examples": {
+                                "minimal": {
+                                    "value": {
+                                        "client": {
+                                            "name": "my-app",
+                                            "version": "1.0"
+                                        },
+                                        "data": {
+                                            "order_id": "12684524978558",
+                                            "fulfillment_order_id": "13795922215294"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Fulfillment processed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request / validation errors",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests (Rate limit exceeded: 10 req/s)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/shipping/v1/shopify/label-fulfill": {
+            "post": {
+                "operationId": "shopify.labelAndFulfill",
+                "summary": "Create label AND fulfill order",
+                "description": "Accepts a Shopify order and fulfillment_order_id. Packs items if needed, creates a shipping label (if provider supports it), AND fulfills the order in Shopify.",
+
+                "security": [
+                    {
+                        "ClientIdHeader": [],
+                        "SignatureHeader": [],
+                        "TimestampHeader": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FulfillRequest"
+                            },
+                            "examples": {
+                                "minimal": {
+                                    "value": {
+                                        "client": {
+                                            "name": "my-app",
+                                            "version": "1.0"
+                                        },
+                                        "data": {
+                                            "order_id": "12684524978558",
+                                            "fulfillment_order_id": "13795922215294"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Process completed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request / validation errors",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests (Rate limit exceeded: 10 req/s)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Order not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "ClientIdHeader": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Client-ID",
+                "description": "Client ID provided by Packrooster clients (required)"
+            },
+            "SignatureHeader": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Signature",
+                "description": "HMAC-SHA256 signature used to verify request authenticity (required).\n\nCalculation: compute HMAC-SHA256 using the client's shared secret over the string formed by concatenating the X-Timestamp header value and the raw request body (no additional separators). Example in PHP: `hash_hmac('sha256', $timestamp . $body, $client_secret)`. Use the lowercase hex digest as the header value. The X-Timestamp header must be a Unix timestamp (seconds)."
+            },
+            "TimestampHeader": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Timestamp",
+                "description": "Unix timestamp header used in request signing (required). Must be within ±300 seconds of server time. Used to prevent replay attacks."
+            }
+        },
+        "schemas": {
+            "FulfillRequest": {
+                "type": "object",
+                "required": ["client", "data"],
+                "properties": {
+                    "client": {
+                        "type": "object",
+                        "description": "Client metadata",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "version": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "data": {
+                        "type": "object",
+                        "required": ["order_id", "fulfillment_order_id"],
+                        "properties": {
+                            "order_id": {
+                                "type": "string",
+                                "description": "Shopify order id"
+                            },
+                            "fulfillment_order_id": {
+                                "type": "string",
+                                "description": "Shopify fulfillment order id"
+                            },
+                            "operator": {
+                                "type": "string",
+                                "description": "Optional operator id to attribute packing/fulfillment"
+                            }
+                        }
+                    }
+                }
+            },
+            "TrackingInfo": {
+                "type": "object",
+                "properties": {
+                    "carrier": {
+                        "type": "string",
+                        "example": "DHL"
+                    },
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "example": "JD0123456789"
+                    }
+                }
+            },
+            "LabelUrls": {
+                "type": "object",
+                "properties": {
+                    "shipping": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "customs": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "return": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    }
+                }
+            },
+            "FulfillmentEntry": {
+                "type": "object",
+                "properties": {
+                    "tracking": {
+                        "$ref": "#/components/schemas/TrackingInfo"
+                    },
+                    "labels": {
+                        "$ref": "#/components/schemas/LabelUrls"
+                    }
+                }
+            },
+            "SuccessResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "ok"
+                    },
+                    "code": {
+                        "type": "string",
+                        "example": "fulfillment-processed"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Fulfillment processed"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FulfillmentEntry"
+                        }
+                    }
+                }
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "error"
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Machine-readable error code"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Human-readable error message"
+                    }
+                }
+            },
+            "MiddlewareErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "error"
+                    },
+                    "error": {
+                        "type": "string",
+                        "description": "Error message"
+                    }
+                }
+            }
+        }
+    }
+}

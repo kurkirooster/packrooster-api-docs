@@ -1,0 +1,893 @@
+openapi: 3.1.1
+info:
+  title: Packrooster API
+  description: |
+    API for creating shipping labels and fulfilling Shopify orders via Packrooster.
+
+    ## Authentication
+
+    All requests to the Packrooster API must be authenticated using a HMAC-SHA256 signature. This prevents request tampering and ensures authenticity.
+
+    ### Required Headers
+
+    | Header | Description |
+    | :--- | :--- |
+    | `X-Client-ID` | Your unique Client ID provided by Packrooster's user interface. |
+    | `X-Timestamp` | Current Unix timestamp (seconds). Must be within 300 seconds of server time. |
+    | `X-Signature` | HMAC-SHA256 signature (lowercase hex). |
+
+    ### Credentials
+
+    Both your **Client ID** and **Client Secret** are provided by Packrooster's user interface. The Client Secret is used to calculate the HMAC-SHA256 signature but is never sent in the request headers.
+
+    ### Signature Calculation
+
+    All requests use the same signature format: `HMAC-SHA256(timestamp + full_url + payload, client_secret)`
+
+    The message to sign is: `X-Timestamp` + full absolute URL + payload
+
+    Where `payload` is:
+    - **GET requests**: Query string (e.g., `fulfillment_order_id=123456`)
+    - **POST/DELETE requests**: Raw request payload (no spaces or separators)
+
+    Examples:
+    - For `GET https://packrooster.approosters.com/api/shipping/v1/shopify/get?fulfillment_order_id=123456`, the message would be `1736427180https://packrooster.approosters.com/api/shipping/v1/shopify/getfulfillment_order_id=123456`
+    - For `POST https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill` with payload `{"client":{...},"data":{...}}`, the message would be `1736427180https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill{"client":{...},"data":{...}}`
+
+    #### POST/DELETE Request Example
+    - **X-Timestamp**: `1736427180`
+    - **Full URL**: `https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill`
+    - **Payload**: `{"client":{"name":"my-app","version":"1.0"},"data":{"order_id":"123","fulfillment_order_id":"456"}}`
+    - **Client Secret**: `my_secret_key`
+    - **String to Hash**: `1736427180https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill{"client":{"name":"my-app","version":"1.0"},"data":{"order_id":"123","fulfillment_order_id":"456"}}`
+    - **Resulting X-Signature**: `3c8c2156068a8391cf510c3c2243ad0aacf5342ff684893343d2095348a76f8c`
+
+    #### GET Request Example
+    - **X-Timestamp**: `1736427180`
+    - **Full URL**: `https://packrooster.approosters.com/api/shipping/v1/shopify/get`
+    - **Query String**: `fulfillment_order_id=123456`
+    - **Client Secret**: `my_secret_key`
+    - **String to Hash**: `1736427180https://packrooster.approosters.com/api/shipping/v1/shopify/getfulfillment_order_id=123456`
+    - **Resulting X-Signature**: `93635a884be6bb3f82ad31d1e074a7ed7df16f815efa68659b72393317cf1ad6`
+
+    #### Implementation Examples
+
+    ```php
+    // PHP Example - Unified format for all HTTP methods
+    $full_url = 'https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill';
+
+    // For GET: payload is query string (e.g., 'fulfillment_order_id=123456')
+    // For POST/DELETE: payload is request payload
+    $payload = $is_get_request
+        ? $_SERVER['QUERY_STRING'] ?? ''
+        : json_encode([
+            "client" => ["name" => "my-app", "version" => "1.0"],
+            "data" => ["order_id" => "123", "fulfillment_order_id" => "456"]
+        ]);
+
+    $timestamp = time();
+    $message = $timestamp . $full_url . $payload;
+    $signature = hash_hmac('sha256', $message, $client_secret);
+    ```
+
+    ```javascript
+    // Node.js Example - Unified format for all HTTP methods
+    const crypto = require('crypto');
+    const fullUrl = 'https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill';
+
+    // For GET: payload is query string (e.g., 'fulfillment_order_id=123456')
+    // For POST/DELETE: payload is request payload
+    const payload = isGetRequest
+        ? new URL(url).search.substring(1) // Remove leading '?'
+        : JSON.stringify({
+            client: { name: "my-app", version: "1.0" },
+            data: { order_id: "123", fulfillment_order_id: "456" }
+          });
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = timestamp.toString() + fullUrl + payload;
+    const signature = crypto
+      .createHmac('sha256', clientSecret)
+      .update(message)
+      .digest('hex');
+    ```
+  version: 0.0.1
+  contact:
+    name: Approosters
+    email: support@approosters.com
+  license:
+    name: Proprietary
+    url: https://approosters.com
+servers:
+  - url: https://packrooster.approosters.com
+    description: Base URL for Packrooster
+paths:
+  /api/shipping/v1/shopify/label:
+    post:
+      operationId: shopify.label
+      summary: Create shipping label (no fulfillment)
+      description: Accepts a Shopify order and fulfillment_order_id. Packs items if needed and creates a shipping label (if provider supports it). Does NOT fulfill the order in Shopify. Returns label URLs and available tracking info.
+      x-code-samples:
+        - lang: curl
+          label: curl
+          source: |
+            curl -X POST https://packrooster.approosters.com/api/shipping/v1/shopify/label \
+              -H "Content-Type: application/json" \
+              -H "X-Client-ID: YOUR_CLIENT_ID" \
+              -H "X-Timestamp: 1736427180" \
+              -H "X-Signature: 3c8c2156068a8391cf510c3c2243ad0aacf5342ff684893343d2095348a76f8c" \
+              -d '{"client":{"name":"my-app","version":"1.0"},"data":{"order_id":"123","fulfillment_order_id":"456"}}'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FulfillRequest"
+            examples:
+              minimal:
+                value:
+                  client:
+                    name: my-app
+                    version: "1.0"
+                  data:
+                    order_id: "12684524978558"
+                    fulfillment_order_id: "13795922215294"
+      responses:
+        "200":
+          description: Label created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request / validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing-client:
+                  value:
+                    status: error
+                    code: missing-or-invalid-client
+                    message: Missing or invalid client information
+                missing-data:
+                  value:
+                    status: error
+                    code: missing-or-invalid-data
+                    message: Missing or invalid data payload
+                missing-order-id:
+                  value:
+                    status: error
+                    code: missing-required-field-order_id
+                    message: "Missing required field: order_id"
+                missing-fulfillment-order-id:
+                  value:
+                    status: error
+                    code: missing-required-field-fulfillment_order_id
+                    message: "Missing required field: fulfillment_order_id"
+                no-packed-items:
+                  value:
+                    status: error
+                    code: no-packed-shipping-items
+                    message: No packed shipping items for this fulfillment
+        "401":
+          description: Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: "Too Many Requests (Rate limit exceeded: 10 req/s)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                order-not-found:
+                  value:
+                    status: error
+                    code: order-not-found
+                    message: Order not found
+                fulfillment-order-not-found:
+                  value:
+                    status: error
+                    code: fulfillment-order-not-found
+                    message: Fulfillment order not found for this order
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                product-processing-failed:
+                  value:
+                    status: error
+                    code: product-processing-failed
+                    message: Product processing failed
+                internal-server-error:
+                  value:
+                    status: error
+                    code: internal-server-error
+                    message: Internal server error
+  /api/shipping/v1/shopify/fulfill:
+    post:
+      operationId: shopify.fulfill
+      summary: Fulfill a Shopify order (no new label)
+      description: Accepts a Shopify order and fulfillment_order_id. Packs items if needed and fulfills the order in Shopify (sends tracking info). Does NOT create a new shipping label.
+      x-code-samples:
+        - lang: curl
+          label: curl
+          source: |
+            curl -X POST https://packrooster.approosters.com/api/shipping/v1/shopify/fulfill \
+              -H "Content-Type: application/json" \
+              -H "X-Client-ID: YOUR_CLIENT_ID" \
+              -H "X-Timestamp: 1736427180" \
+              -H "X-Signature: 3c8c2156068a8391cf510c3c2243ad0aacf5342ff684893343d2095348a76f8c" \
+              -d '{"client":{"name":"my-app","version":"1.0"},"data":{"order_id":"123","fulfillment_order_id":"456"}}'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FulfillRequest"
+            examples:
+              minimal:
+                value:
+                  client:
+                    name: my-app
+                    version: "1.0"
+                  data:
+                    order_id: "12684524978558"
+                    fulfillment_order_id: "13795922215294"
+      responses:
+        "200":
+          description: Fulfillment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request / validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing-client:
+                  value:
+                    status: error
+                    code: missing-or-invalid-client
+                    message: Missing or invalid client information
+                missing-data:
+                  value:
+                    status: error
+                    code: missing-or-invalid-data
+                    message: Missing or invalid data payload
+                missing-order-id:
+                  value:
+                    status: error
+                    code: missing-required-field-order_id
+                    message: "Missing required field: order_id"
+                missing-fulfillment-order-id:
+                  value:
+                    status: error
+                    code: missing-required-field-fulfillment_order_id
+                    message: "Missing required field: fulfillment_order_id"
+                no-packed-items:
+                  value:
+                    status: error
+                    code: no-packed-shipping-items
+                    message: No packed shipping items for this fulfillment
+        "401":
+          description: Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: "Too Many Requests (Rate limit exceeded: 10 req/s)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                order-not-found:
+                  value:
+                    status: error
+                    code: order-not-found
+                    message: Order not found
+                fulfillment-order-not-found:
+                  value:
+                    status: error
+                    code: fulfillment-order-not-found
+                    message: Fulfillment order not found for this order
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                product-processing-failed:
+                  value:
+                    status: error
+                    code: product-processing-failed
+                    message: Product processing failed
+                shipping-fulfill-failed:
+                  value:
+                    status: error
+                    code: shipping-fulfill-failed
+                    message: Shipping fulfillment failed
+                shopify-api-error:
+                  value:
+                    status: error
+                    code: shopify-api-error
+                    message: Shopify API error
+                internal-server-error:
+                  value:
+                    status: error
+                    code: internal-server-error
+                    message: Internal server error
+  /api/shipping/v1/shopify/label-fulfill:
+    post:
+      operationId: shopify.labelAndFulfill
+      summary: Create label AND fulfill order
+      description: Accepts a Shopify order and fulfillment_order_id. Packs items if needed, creates a shipping label (if provider supports it), AND fulfills the order in Shopify.
+      x-code-samples:
+        - lang: curl
+          label: curl
+          source: |
+            curl -X POST https://packrooster.approosters.com/api/shipping/v1/shopify/label-fulfill \
+              -H "Content-Type: application/json" \
+              -H "X-Client-ID: YOUR_CLIENT_ID" \
+              -H "X-Timestamp: 1736427180" \
+              -H "X-Signature: 3c8c2156068a8391cf510c3c2243ad0aacf5342ff684893343d2095348a76f8c" \
+              -d '{"client":{"name":"my-app","version":"1.0"},"data":{"order_id":"123","fulfillment_order_id":"456"}}'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FulfillRequest"
+            examples:
+              minimal:
+                value:
+                  client:
+                    name: my-app
+                    version: "1.0"
+                  data:
+                    order_id: "12684524978558"
+                    fulfillment_order_id: "13795922215294"
+      responses:
+        "200":
+          description: Process completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request / validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing-client:
+                  value:
+                    status: error
+                    code: missing-or-invalid-client
+                    message: Missing or invalid client information
+                missing-data:
+                  value:
+                    status: error
+                    code: missing-or-invalid-data
+                    message: Missing or invalid data payload
+                missing-order-id:
+                  value:
+                    status: error
+                    code: missing-required-field-order_id
+                    message: "Missing required field: order_id"
+                missing-fulfillment-order-id:
+                  value:
+                    status: error
+                    code: missing-required-field-fulfillment_order_id
+                    message: "Missing required field: fulfillment_order_id"
+                no-packed-items:
+                  value:
+                    status: error
+                    code: no-packed-shipping-items
+                    message: No packed shipping items for this fulfillment
+        "401":
+          description: Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: "Too Many Requests (Rate limit exceeded: 10 req/s)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                order-not-found:
+                  value:
+                    status: error
+                    code: order-not-found
+                    message: Order not found
+                fulfillment-order-not-found:
+                  value:
+                    status: error
+                    code: fulfillment-order-not-found
+                    message: Fulfillment order not found for this order
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                product-processing-failed:
+                  value:
+                    status: error
+                    code: product-processing-failed
+                    message: Product processing failed
+                shipping-fulfill-failed:
+                  value:
+                    status: error
+                    code: shipping-fulfill-failed
+                    message: Shipping fulfillment failed
+                shopify-api-error:
+                  value:
+                    status: error
+                    code: shopify-api-error
+                    message: Shopify API error
+                internal-server-error:
+                  value:
+                    status: error
+                    code: internal-server-error
+                    message: Internal server error
+  /api/shipping/v1/shopify/get:
+    get:
+      operationId: shopify.get
+      summary: Get tracking data and label URLs
+      description: Retrieve tracking information and label URLs for a specific fulfillment order. No request body required.
+      parameters:
+        - name: fulfillment_order_id
+          in: query
+          required: true
+          description: Shopify fulfillment order ID
+          schema:
+            type: integer
+            example: 13795922215294
+      x-code-samples:
+        - lang: curl
+          label: curl
+          source: |
+            curl -X GET "https://packrooster.approosters.com/api/shipping/v1/shopify/get?fulfillment_order_id=13795922215294" \
+              -H "X-Client-ID: YOUR_CLIENT_ID" \
+              -H "X-Timestamp: 1736427180" \
+              -H "X-Signature: YOUR_SIGNATURE"
+      responses:
+        "200":
+          description: Fulfillment data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: ok
+                    code: fulfillment-data-retrieved
+                    message: Fulfillment data retrieved
+                    data:
+                      - tracking:
+                          carrier: DHL
+                          url: https://tracking.dhl.com/1234567890
+                          code: JD0123456789
+                        labels:
+                          shipping: https://packrooster.approosters.com/pdf/label/123
+                          customs: null
+                          return: null
+                not-fulfilled:
+                  value:
+                    status: ok
+                    code: fulfillment-order-exists
+                    message: Fulfillment order exists but has not been fulfilled yet
+                    data:
+                      - tracking:
+                          carrier: Posti
+                          url: ""
+                          code: ""
+                        labels:
+                          shipping: null
+                          customs: null
+                          return: null
+        "400":
+          description: Bad request / validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing-parameter:
+                  value:
+                    status: error
+                    code: missing-parameter
+                    message: "Missing required parameter: fulfillment_order_id"
+                invalid-parameter:
+                  value:
+                    status: error
+                    code: invalid-parameter
+                    message: "Invalid fulfillment_order_id: must be a positive integer"
+        "401":
+          description: Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: "Too Many Requests (Rate limit exceeded: 10 req/s)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "404":
+          description: Fulfillment order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not-found:
+                  value:
+                    status: error
+                    code: fulfillment-order-not-found
+                    message: Fulfillment order not found
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/shipping/v1/shopify/delete:
+    delete:
+      operationId: shopify.delete
+      summary: Delete order, fulfillment, or fulfillment order
+      description: |
+        Delete orders, fulfillments, or fulfillment orders from Packrooster and cancel them in Shopify.
+
+        - **Order**: Deletes the order and cancels all associated fulfillments in Shopify
+        - **Fulfillment**: Cancels the fulfillment in Shopify and removes the shipment
+        - **Fulfillment order**: Cancels all associated fulfillments in Shopify and removes shipments
+      x-code-samples:
+        - lang: curl
+          label: curl
+          source: |
+            curl -X DELETE https://packrooster.approosters.com/api/shipping/v1/shopify/delete \
+              -H "Content-Type: application/json" \
+              -H "X-Client-ID: YOUR_CLIENT_ID" \
+              -H "X-Timestamp: 1736427180" \
+              -H "X-Signature: YOUR_SIGNATURE" \
+              -d '{"client":{"name":"my-app","version":"1.0"},"data":{"type":"fulfillment","id":"123456"}}'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteRequest"
+            examples:
+              delete-order:
+                value:
+                  client:
+                    name: my-app
+                    version: "1.0"
+                  data:
+                    type: order
+                    id: "12684524978558"
+              delete-fulfillment:
+                value:
+                  client:
+                    name: my-app
+                    version: "1.0"
+                  data:
+                    type: fulfillment
+                    id: "1234567890"
+              delete-fulfillment-order:
+                value:
+                  client:
+                    name: my-app
+                    version: "1.0"
+                  data:
+                    type: fulfillment-order
+                    id: "13795922215294"
+      responses:
+        "200":
+          description: Deletion completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteSuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: ok
+        "400":
+          description: Bad request / validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing-type:
+                  value:
+                    status: error
+                    code: missing-required-field-type
+                    message: "Missing required field: type"
+                missing-id:
+                  value:
+                    status: error
+                    code: missing-required-field-id
+                    message: "Missing required field: id"
+                invalid-type:
+                  value:
+                    status: error
+                    code: invalid-type
+                    message: "Invalid type. Must be one of: order, fulfillment, fulfillment-order"
+                missing-client:
+                  value:
+                    status: error
+                    code: missing-or-invalid-client
+                    message: Missing or invalid client information
+                missing-data:
+                  value:
+                    status: error
+                    code: missing-or-invalid-data
+                    message: Missing or invalid data payload
+        "401":
+          description: Unauthorized (Missing headers, invalid signature, timestamp expired/duplicate, or invalid client)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: "Too Many Requests (Rate limit exceeded: 10 req/s)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                order-not-found:
+                  value:
+                    status: error
+                    code: order-not-found
+                    message: Order not found
+                fulfillment-not-found:
+                  value:
+                    status: error
+                    code: fulfillment-not-found
+                    message: Fulfillment not found
+                fulfillment-order-not-found:
+                  value:
+                    status: error
+                    code: fulfillment-order-not-found
+                    message: Fulfillment order not found
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                fulfillment-cancel-failed:
+                  value:
+                    status: error
+                    code: fulfillment-cancel-failed
+                    message: Failed to cancel fulfillment in Shopify
+                internal-server-error:
+                  value:
+                    status: error
+                    code: internal-server-error
+                    message: Internal server error
+components:
+  schemas:
+    FulfillRequest:
+      type: object
+      required:
+        - client
+        - data
+      properties:
+        client:
+          type: object
+          description: Client metadata
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+        data:
+          type: object
+          required:
+            - order_id
+            - fulfillment_order_id
+          properties:
+            order_id:
+              type: string
+              description: Shopify order id
+            fulfillment_order_id:
+              type: string
+              description: Shopify fulfillment order id
+            operator:
+              type: string
+              description: Optional operator id to attribute packing/fulfillment
+    DeleteRequest:
+      type: object
+      required:
+        - client
+        - data
+      properties:
+        client:
+          type: object
+          description: Client metadata
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+        data:
+          type: object
+          required:
+            - type
+            - id
+          properties:
+            type:
+              type: string
+              enum: [order, fulfillment, fulfillment-order]
+              description: Type of entity to delete
+            id:
+              type: string
+              description: Shopify ID of the entity to delete (order_id, fulfillment_id, or fulfillment_order_id)
+    DeleteSuccessResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    TrackingInfo:
+      type: object
+      properties:
+        carrier:
+          type: string
+          example: DHL
+        url:
+          type: [string, "null"]
+          format: uri
+        code:
+          type: string
+          example: JD0123456789
+    LabelUrls:
+      type: object
+      properties:
+        shipping:
+          type: [string, "null"]
+          format: uri
+        customs:
+          type: [string, "null"]
+          format: uri
+        return:
+          type: [string, "null"]
+          format: uri
+    FulfillmentEntry:
+      type: object
+      properties:
+        tracking:
+          $ref: "#/components/schemas/TrackingInfo"
+        labels:
+          $ref: "#/components/schemas/LabelUrls"
+    SuccessResponse:
+      type: object
+      required: [status, code, message, data]
+      properties:
+        status:
+          type: string
+          const: ok
+        code:
+          type: string
+          description: |
+            Machine-readable response code indicating what action was performed.
+            Possible values:
+            - `fulfillment-processed`: Fulfillment processed
+            - `label-created`: Label created
+            - `label-already-exists`: Label already exists
+            - `fulfillment-already-exists`: Fulfillment already exists
+            - `label-created-fulfillment-exists`: Label created, fulfillment already exists
+            - `label-created-fulfillment-processed`: Label created and fulfillment processed
+            - `fulfillment-data-retrieved`: Fulfillment data retrieved (GET endpoint)
+            - `fulfillment-order-exists`: Fulfillment order exists but has not been fulfilled yet (GET endpoint)
+          example: fulfillment-processed
+        message:
+          type: string
+          description: Human-readable message describing the result
+          example: Fulfillment processed
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FulfillmentEntry"
+    ErrorResponse:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          const: error
+        code:
+          type: string
+          description: Machine-readable error code
+        message:
+          type: string
+          description: Human-readable error message
+    UnauthorizedErrorResponse:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          const: error
+        code:
+          type: string
+          description: |
+            Machine-readable error code in kebab-case.
+            Possible values:
+            - `missing-client-id`: Missing or invalid X-Client-ID header
+            - `missing-timestamp`: Missing or invalid X-Timestamp header
+            - `missing-signature`: Missing or invalid X-Signature header
+            - `invalid-timestamp-format`: X-Timestamp must be numeric
+            - `request-timeout`: Request timestamp outside acceptable window (within 300 seconds)
+            - `invalid-client-id`: Invalid client ID
+            - `replay-attempt`: Duplicate timestamp detected (replay attempt)
+            - `invalid-signature`: Invalid signature
+          example: unauthorized-access
+        message:
+          type: string
+          description: Human-readable error message
+    RateLimitErrorResponse:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          const: error
+        code:
+          type: string
+          const: rate-limit-exceeded
+        message:
+          type: string
+          const: Rate limit exceeded
